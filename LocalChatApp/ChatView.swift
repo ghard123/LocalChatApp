@@ -6,36 +6,46 @@
 //
 
 import SwiftUI
+import FoundationModels
 
 struct ChatView: View {
     @State private var input = ""
+    @State private var session = LanguageModelSession()
     
     var body: some View {
         NavigationStack {
             ScrollView {
                 LazyVStack {
-                    Text("Hello World")
-                        .padding()
-                        .background {
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(lineWidth: 1)
+                    ForEach(session.transcript) { entry in
+                        switch entry {
+                        case .prompt(let response):
+                            Text(segmentsToString(segments: response.segments))
+                                .padding()
+                                .background {
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(lineWidth: 1)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+                                .padding(.horizontal)
+                        case .response(let response):
+                            Text(segmentsToString(segments: response.segments))
+                                .padding()
+                                .background {
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(lineWidth: 1)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding()
+                        default:
+                            EmptyView()
                         }
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .padding(.horizontal)
-                    Text("Hello system")
-                        .padding()
-                        .background {
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(lineWidth: 1)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
+                    }
                 }
             }
             .navigationTitle("Local Chat")
             .toolbar {
                 Button("Reset", systemImage: "arrow.counterclockwise") {
-                    
+                    session = LanguageModelSession()
                 }
             }
             .safeAreaInset(edge: .bottom) {
@@ -43,7 +53,14 @@ struct ChatView: View {
                     TextField("How can I help you?", text: $input)
                         .textFieldStyle(.roundedBorder)
                     Button("Send", systemImage: "paperplane") {
-                        
+                        Task {
+                            do {
+                                try await session.respond(to: input)
+                                input.removeAll()
+                            } catch {
+                                print(error)
+                            }
+                        }
                     }
                     .labelStyle(.iconOnly)
                     .padding()
@@ -52,6 +69,15 @@ struct ChatView: View {
                 .padding()
             }
         }
+    }
+    func segmentsToString(segments: [Transcript.Segment]) -> String {
+        let strings = segments.compactMap { segment -> String? in
+            if case let .text(textSegment) = segment {
+                return textSegment.content
+            }
+            return nil
+        }
+        return strings.reduce("", +)
     }
 }
 
